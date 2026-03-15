@@ -1,0 +1,170 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isPlatformSuperAdmin() {
+      return signedIn() && request.auth.token.platformRole == 'super_admin';
+    }
+
+    function membershipDoc(spaceId) {
+      return /databases/$(database)/documents/spaces/$(spaceId)/memberships/$(request.auth.uid);
+    }
+
+    function isSpaceMember(spaceId) {
+      return signedIn() &&
+        exists(membershipDoc(spaceId)) &&
+        get(membershipDoc(spaceId)).data.status == 'active';
+    }
+
+    function isSpaceAdmin(spaceId) {
+      return isPlatformSuperAdmin() || (
+        isSpaceMember(spaceId) &&
+        get(membershipDoc(spaceId)).data.role == 'space_admin'
+      );
+    }
+
+    function profileBelongsToSpace(spaceId, profileId) {
+      return exists(/databases/$(database)/documents/spaces/$(spaceId)/profiles/$(profileId));
+    }
+
+    function isValidProfileWrite(spaceId, profileId) {
+      return isSpaceMember(spaceId) &&
+        profileBelongsToSpace(spaceId, profileId) &&
+        get(/databases/$(database)/documents/spaces/$(spaceId)/profiles/$(profileId)).data.isActive == true;
+    }
+
+    function mediaExists(spaceId, mediaItemId) {
+      return exists(/databases/$(database)/documents/spaces/$(spaceId)/mediaItems/$(mediaItemId));
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isPlatformSuperAdmin());
+      allow create: if signedIn() &&
+        request.auth.uid == userId &&
+        request.resource.data.platformRole == 'none';
+      allow update: if isPlatformSuperAdmin() || (
+        signedIn() &&
+        request.auth.uid == userId &&
+        request.resource.data.platformRole == resource.data.platformRole
+      );
+      allow delete: if isPlatformSuperAdmin();
+    }
+
+    match /platformSettings/{docId} {
+      allow read, write: if isPlatformSuperAdmin();
+    }
+
+    match /subscriptionPlans/{planId} {
+      allow read: if signedIn();
+      allow write: if isPlatformSuperAdmin();
+    }
+
+    match /spaces/{spaceId} {
+      allow read: if isPlatformSuperAdmin() || isSpaceMember(spaceId);
+      allow create, delete: if isPlatformSuperAdmin();
+      allow update: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+
+      match /memberships/{userId} {
+        allow read: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId) || request.auth.uid == userId;
+        allow create, update, delete: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+      }
+
+      match /profiles/{profileId} {
+        allow read: if isPlatformSuperAdmin() || isSpaceMember(spaceId);
+        allow create, update, delete: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+
+        match /favorites/{mediaItemId} {
+          allow read: if isPlatformSuperAdmin() || isValidProfileWrite(spaceId, profileId);
+          allow create, update, delete: if isPlatformSuperAdmin() || (
+            isValidProfileWrite(spaceId, profileId) &&
+            mediaExists(spaceId, mediaItemId) &&
+            request.resource.data.spaceId == spaceId &&
+            request.resource.data.profileId == profileId &&
+            request.resource.data.mediaItemId == mediaItemId
+          );
+        }
+
+        match /continueWatching/{mediaItemId} {
+          allow read: if isPlatformSuperAdmin() || isValidProfileWrite(spaceId, profileId);
+          allow create, update, delete: if isPlatformSuperAdmin() || (
+            isValidProfileWrite(spaceId, profileId) &&
+            mediaExists(spaceId, mediaItemId) &&
+            request.resource.data.spaceId == spaceId &&
+            request.resource.data.profileId == profileId &&
+            request.resource.data.mediaItemId == mediaItemId
+          );
+        }
+
+        match /watchHistory/{historyId} {
+          allow read: if isPlatformSuperAdmin() || isValidProfileWrite(spaceId, profileId);
+          allow create: if isPlatformSuperAdmin() || (
+            isValidProfileWrite(spaceId, profileId) &&
+            mediaExists(spaceId, request.resource.data.mediaItemId) &&
+            request.resource.data.spaceId == spaceId &&
+            request.resource.data.profileId == profileId
+          );
+          allow update, delete: if isPlatformSuperAdmin();
+        }
+      }
+
+      match /categories/{categoryId} {
+        allow read: if isPlatformSuperAdmin() || isSpaceMember(spaceId);
+        allow write: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+      }
+
+      match /collections/{collectionId} {
+        allow read: if isPlatformSuperAdmin() || isSpaceMember(spaceId);
+        allow write: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+      }
+
+      match /seasons/{seasonId} {
+        allow read: if isPlatformSuperAdmin() || isSpaceMember(spaceId);
+        allow write: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+      }
+
+      match /mediaAssets/{assetId} {
+        allow read: if isPlatformSuperAdmin() || isSpaceMember(spaceId);
+        allow write: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+      }
+
+      match /mediaItems/{mediaItemId} {
+        allow read: if isPlatformSuperAdmin() || isSpaceMember(spaceId);
+        allow create, update, delete: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+
+        match /frames/{frameId} {
+          allow read: if isPlatformSuperAdmin() || isSpaceMember(spaceId);
+          allow write: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+        }
+      }
+
+      match /invites/{inviteId} {
+        allow read: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+        allow create, update, delete: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+      }
+
+      match /homepageRows/{rowId} {
+        allow read: if isPlatformSuperAdmin() || isSpaceMember(spaceId);
+        allow write: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+      }
+
+      match /subscriptions/{subscriptionId} {
+        allow read: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+        allow write: if isPlatformSuperAdmin();
+      }
+
+      match /analyticsDaily/{docId} {
+        allow read: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+        allow write: if isPlatformSuperAdmin();
+      }
+
+      match /activityLogs/{logId} {
+        allow read: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+        allow create: if isPlatformSuperAdmin() || isSpaceAdmin(spaceId);
+        allow update, delete: if isPlatformSuperAdmin();
+      }
+    }
+  }
+}

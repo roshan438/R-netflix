@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-canvas text-white font-sans;
+  background-image:
+    radial-gradient(circle at top, rgba(207, 176, 122, 0.16), transparent 28%),
+    linear-gradient(180deg, rgba(4, 9, 18, 0.97), rgba(3, 5, 10, 1));
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(207, 176, 122, 0.45) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(207, 176, 122, 0.45);
+  border-radius: 9999px;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #fff1d1 0%, #cfb07a 48%, #ff8d6d 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.glass-panel {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 255, 255, 0.03)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.cinematic-mask {
+  mask-image: linear-gradient(180deg, black 70%, transparent 100%);
+}
