@@ -1,6 +1,8 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, useParams } from "react-router-dom";
 import { AppProviders } from "@/app/AppProviders";
+import { useAuth } from "@/context/AuthContext";
+import { useProfile } from "@/context/ProfileContext";
 import {
   AuthGuard,
   PlatformAdminGuard,
@@ -170,6 +172,34 @@ function SpaceRootRedirect() {
   return <Navigate replace to={`/${spaceSlug}/home`} />;
 }
 
+function AppFallbackRedirect() {
+  const { currentSpace, loading, user } = useAuth();
+  const { activeProfile } = useProfile();
+
+  if (loading) {
+    return <RouteLoader />;
+  }
+
+  if (!user) {
+    return <Navigate replace to="/login" />;
+  }
+
+  if (user.pendingApproval && !currentSpace) {
+    return <Navigate replace to="/pending-approval" />;
+  }
+
+  if (currentSpace) {
+    return (
+      <Navigate
+        replace
+        to={activeProfile ? `/${currentSpace.slug}/home` : `/${currentSpace.slug}/profiles`}
+      />
+    );
+  }
+
+  return <Navigate replace to="/login" />;
+}
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -182,6 +212,10 @@ export const router = createBrowserRouter([
   {
     path: "/invite/:spaceSlug/:token",
     element: withProviders(lazyElement(<InviteAcceptancePage />)),
+  },
+  {
+    path: "*",
+    element: withProviders(<AppFallbackRedirect />),
   },
   {
     element: withProviders(<AuthGuard />),
