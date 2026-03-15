@@ -1,16 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { LoginCard } from "@/components/auth/LoginCard";
 import { LogoMark } from "@/components/common/logo-mark";
 import { IntroScreen } from "@/components/intro/IntroScreen";
 import { useAuth } from "@/context/AuthContext";
+import { useProfile } from "@/context/ProfileContext";
 
 export function SpaceLoginPage() {
-  const { signIn, signInWithGoogle, signUp } = useAuth();
+  const { currentSpace, rememberedSpaceSlug, signIn, signInWithGoogle, signUp, user } = useAuth();
+  const { activeProfile } = useProfile();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [introDone, setIntroDone] = useState(false);
+
+  useEffect(() => {
+    if (currentSpace) {
+      navigate(
+        activeProfile ? `/${currentSpace.slug}/home` : `/${currentSpace.slug}/profiles`,
+        { replace: true },
+      );
+      return;
+    }
+
+    if (user?.pendingApproval) {
+      navigate("/pending-approval", { replace: true });
+    }
+  }, [activeProfile, currentSpace, navigate, user]);
 
   return (
     <div className="min-h-screen bg-hero-glow">
@@ -29,6 +45,7 @@ export function SpaceLoginPage() {
           <LoginCard
             initialEmail={searchParams.get("email") ?? undefined}
             initialSpaceSlug={searchParams.get("space") ?? undefined}
+            rememberedSpaceSlug={searchParams.get("space") ?? undefined ? undefined : rememberedSpaceSlug}
             onEmailSubmit={async (values, mode) => {
               try {
                 const result =

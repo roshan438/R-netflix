@@ -9,10 +9,15 @@ import {
 import { authService } from "@/services/firebase/auth";
 import type { SpaceSummary, UserAccount } from "@/types/domain";
 
+const LAST_SPACE_SLUG_KEY = "reverie.lastSpaceSlug";
+const LAST_ACTIVITY_KEY = "reverie.lastActivityAt";
+const INACTIVITY_TIMEOUT_MS = 3 * 60 * 60 * 1000;
+
 interface AuthContextValue {
   user: UserAccount | null;
   currentSpace: SpaceSummary | null;
   loading: boolean;
+  rememberedSpaceSlug: string;
   signIn: (args: {
     email: string;
     password: string;
@@ -33,22 +38,86 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserAccount | null>(null);
   const [currentSpace, setCurrentSpace] = useState<SpaceSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rememberedSpaceSlug, setRememberedSpaceSlug] = useState(() =>
+    typeof window !== "undefined" ? window.localStorage.getItem(LAST_SPACE_SLUG_KEY) ?? "" : "",
+  );
 
   useEffect(() => {
     const unsubscribe = authService.subscribe(({ account, space }) => {
       setUser(account);
       setCurrentSpace(space);
+      if (space?.slug) {
+        window.localStorage.setItem(LAST_SPACE_SLUG_KEY, space.slug);
+        setRememberedSpaceSlug(space.slug);
+      } else if (account?.pendingApproval?.requestedSpaceSlug) {
+        window.localStorage.setItem(LAST_SPACE_SLUG_KEY, account.pendingApproval.requestedSpaceSlug);
+        setRememberedSpaceSlug(account.pendingApproval.requestedSpaceSlug);
+      }
       setLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    if (!user) {
+      window.localStorage.removeItem(LAST_ACTIVITY_KEY);
+      return;
+    }
+
+    const touchSession = () => {
+      window.localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
+    };
+
+    const checkExpiry = () => {
+      const lastActivity = Number(window.localStorage.getItem(LAST_ACTIVITY_KEY) ?? "0");
+      if (lastActivity && Date.now() - lastActivity >= INACTIVITY_TIMEOUT_MS) {
+        void authService.signOut().finally(() => {
+          window.localStorage.removeItem(LAST_ACTIVITY_KEY);
+          window.localStorage.removeItem("reverie.activeProfileId");
+          setUser(null);
+          setCurrentSpace(null);
+        });
+      }
+    };
+
+    touchSession();
+    const events: Array<keyof WindowEventMap> = [
+      "pointerdown",
+      "pointermove",
+      "keydown",
+      "scroll",
+      "touchstart",
+    ];
+
+    const handleActivity = () => {
+      if (document.visibilityState === "hidden") return;
+      touchSession();
+    };
+
+    events.forEach((eventName) => {
+      window.addEventListener(eventName, handleActivity, { passive: true });
+    });
+    document.addEventListener("visibilitychange", handleActivity);
+
+    const timer = window.setInterval(checkExpiry, 60_000);
+    checkExpiry();
+
+    return () => {
+      events.forEach((eventName) => {
+        window.removeEventListener(eventName, handleActivity);
+      });
+      document.removeEventListener("visibilitychange", handleActivity);
+      window.clearInterval(timer);
+    };
+  }, [user]);
+
   const value = useMemo(
     () => ({
       user,
       currentSpace,
       loading,
+      rememberedSpaceSlug,
       async signIn({
         email,
         password,
@@ -99,11 +168,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signOut() {
         await authService.signOut();
+        window.localStorage.removeItem(LAST_ACTIVITY_KEY);
+        window.localStorage.removeItem("reverie.activeProfileId");
         setUser(null);
         setCurrentSpace(null);
       },
     }),
-    [user, currentSpace, loading],
+    [user, currentSpace, loading, rememberedSpaceSlug],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

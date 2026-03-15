@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Maximize, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDuration } from "@/services/utils/dates";
@@ -28,7 +28,15 @@ interface YouTubePlayerInstance {
   seekTo(seconds: number, allowSeekAhead: boolean): void;
   getCurrentTime(): number;
   getDuration(): number;
+  getVolume(): number;
+  setVolume(volume: number): void;
   destroy(): void;
+}
+
+export interface YouTubePlayerSurfaceHandle {
+  togglePlayback(): void;
+  seekBy(seconds: number): void;
+  adjustVolume(delta: number): void;
 }
 
 function loadYouTubeApi() {
@@ -51,15 +59,7 @@ function loadYouTubeApi() {
   });
 }
 
-export function YouTubePlayerSurface({
-  videoId,
-  title,
-  description,
-  showDetails,
-  resumeSeconds = 0,
-  onEnded,
-  onProgress,
-}: {
+export const YouTubePlayerSurface = forwardRef<YouTubePlayerSurfaceHandle, {
   videoId: string;
   title: string;
   description: string;
@@ -67,7 +67,15 @@ export function YouTubePlayerSurface({
   resumeSeconds?: number;
   onEnded: () => void;
   onProgress: (seconds: number, duration: number) => void;
-}) {
+}>(({
+  videoId,
+  title,
+  description,
+  showDetails,
+  resumeSeconds = 0,
+  onEnded,
+  onProgress,
+}, ref) => {
   const playerRef = useRef<YouTubePlayerInstance | null>(null);
   const onEndedRef = useRef(onEnded);
   const onProgressRef = useRef(onProgress);
@@ -75,9 +83,9 @@ export function YouTubePlayerSurface({
   const containerId = useMemo(() => `youtube-player-${videoId}`, [videoId]);
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(100);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isSeeking, setIsSeeking] = useState(false);
   const [interactionPulse, setInteractionPulse] = useState<"play" | "pause" | null>(null);
   const pulseTimerRef = useRef<number | null>(null);
 
@@ -102,6 +110,33 @@ export function YouTubePlayerSurface({
       showPulse("play");
     }
   };
+
+  const seekBy = (seconds: number) => {
+    const current = playerRef.current?.getCurrentTime() ?? progress;
+    const total = playerRef.current?.getDuration() ?? duration;
+    const nextValue = Math.max(0, Math.min(current + seconds, total || current + seconds));
+    playerRef.current?.seekTo(nextValue, true);
+    setProgress(nextValue);
+  };
+
+  const adjustVolume = (delta: number) => {
+    const nextVolume = Math.max(0, Math.min((playerRef.current?.getVolume() ?? volume) + delta, 100));
+    playerRef.current?.setVolume(nextVolume);
+    if (nextVolume === 0) {
+      playerRef.current?.mute();
+      setMuted(true);
+    } else {
+      playerRef.current?.unMute();
+      setMuted(false);
+    }
+    setVolume(nextVolume);
+  };
+
+  useImperativeHandle(ref, () => ({
+    togglePlayback,
+    seekBy,
+    adjustVolume,
+  }));
 
   useEffect(() => {
     onEndedRef.current = onEnded;
@@ -134,6 +169,7 @@ export function YouTubePlayerSurface({
               playerRef.current?.seekTo(resumeSeconds, true);
               setProgress(resumeSeconds);
             }
+            setVolume(playerRef.current?.getVolume() ?? 100);
             playerRef.current?.playVideo();
           },
           onStateChange: (event: { data: number }) => {
@@ -144,10 +180,12 @@ export function YouTubePlayerSurface({
               intervalId = window.setInterval(() => {
                 const current = playerRef.current?.getCurrentTime() ?? 0;
                 const total = playerRef.current?.getDuration() ?? 0;
+                const playerVolume = playerRef.current?.getVolume() ?? 100;
                 if (!isSeekingRef.current) {
                   setProgress(current);
                 }
                 setDuration(total);
+                setVolume(playerVolume);
                 onProgressRef.current(current, total);
               }, 1000);
             }
@@ -215,6 +253,7 @@ export function YouTubePlayerSurface({
               onClick={() => {
                 if (muted) {
                   playerRef.current?.unMute();
+                  setVolume(playerRef.current?.getVolume() ?? volume ?? 100);
                 } else {
                   playerRef.current?.mute();
                 }
@@ -261,25 +300,21 @@ export function YouTubePlayerSurface({
                 onChange={(event) => setProgress(Number(event.target.value))}
                 onMouseDown={() => {
                   isSeekingRef.current = true;
-                  setIsSeeking(true);
                 }}
                 onMouseUp={(event) => {
                   const nextValue = Number((event.target as HTMLInputElement).value);
                   playerRef.current?.seekTo(nextValue, true);
                   setProgress(nextValue);
                   isSeekingRef.current = false;
-                  setIsSeeking(false);
                 }}
                 onTouchStart={() => {
                   isSeekingRef.current = true;
-                  setIsSeeking(true);
                 }}
                 onTouchEnd={(event) => {
                   const nextValue = Number((event.target as HTMLInputElement).value);
                   playerRef.current?.seekTo(nextValue, true);
                   setProgress(nextValue);
                   isSeekingRef.current = false;
-                  setIsSeeking(false);
                 }}
                 step={1}
                 type="range"
@@ -287,7 +322,10 @@ export function YouTubePlayerSurface({
               />
               <div className="mt-2 flex justify-between text-[11px] text-white/55 sm:text-xs">
                 <span>{formatDuration(Math.floor(progress))}</span>
-                <span>{formatDuration(Math.floor(duration))}</span>
+                <span className="flex items-center gap-3">
+                  <span>{muted ? "Muted" : `Vol ${volume}%`}</span>
+                  <span>{formatDuration(Math.floor(duration))}</span>
+                </span>
               </div>
             </div>
           </div>
@@ -295,4 +333,6 @@ export function YouTubePlayerSurface({
       </div>
     </>
   );
-}
+});
+
+YouTubePlayerSurface.displayName = "YouTubePlayerSurface";

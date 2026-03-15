@@ -8,10 +8,12 @@ export function MediaRail({
   title,
   items,
   eyebrow,
+  progressByMediaId,
 }: {
   title: string;
   items: MediaItem[];
   eyebrow?: string;
+  progressByMediaId?: Record<string, number>;
 }) {
   const railRef = useRef<HTMLDivElement | null>(null);
   const BATCH_SIZE = 5;
@@ -78,6 +80,9 @@ export function MediaRail({
           <h2 className="font-display text-3xl font-semibold tracking-[0.02em] text-white">
             {title}
           </h2>
+          <p className="mt-1 text-sm text-white/38">
+            Curated for this private space.
+          </p>
         </div>
         <div className="hidden items-center gap-2 md:flex">
           <Button
@@ -112,7 +117,7 @@ export function MediaRail({
       >
         {visibleItems.map((item) => (
           <div key={item.id} className="snap-start">
-            <MediaCard media={item} />
+            <MediaCard media={item} progressPercent={progressByMediaId?.[item.id]} />
           </div>
         ))}
       </div>

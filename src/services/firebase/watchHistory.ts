@@ -1,7 +1,11 @@
 import {
+  collection,
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
@@ -10,6 +14,41 @@ import { firestoreDb, isFirebaseConfigured } from "@/services/firebase/config";
 const COMPLETE_THRESHOLD_SECONDS = 8;
 
 export const watchHistoryService = {
+  async listHistory(spaceId: string, profileId: string) {
+    if (!isFirebaseConfigured || !firestoreDb) return [] as Array<{
+      mediaItemId: string;
+      progressSeconds: number;
+      durationSeconds: number;
+      completed: boolean;
+      percentComplete: number;
+    }>;
+
+    const snapshot = await getDocs(
+      query(
+        collection(firestoreDb, `spaces/${spaceId}/profiles/${profileId}/watchHistory`),
+        orderBy("watchedAt", "desc"),
+      ),
+    ).catch(() => null);
+
+    return (
+      snapshot?.docs.map((item) => {
+        const data = item.data();
+        const durationSeconds = Number(data.durationSeconds ?? 0);
+        const progressSeconds = Number(data.progressSeconds ?? 0);
+        return {
+          mediaItemId: String(data.mediaItemId ?? item.id),
+          progressSeconds,
+          durationSeconds,
+          completed: Boolean(data.completed),
+          percentComplete:
+            durationSeconds > 0
+              ? Math.min(Math.round((progressSeconds / durationSeconds) * 100), 100)
+              : 0,
+        };
+      }) ?? []
+    );
+  },
+
   async getResumePoint(spaceId: string, profileId: string, mediaItemId: string) {
     if (!isFirebaseConfigured || !firestoreDb) return 0;
     const snapshot = await getDoc(

@@ -24,6 +24,7 @@ import {
   demoSeasons,
 } from "@/lib/demo-data";
 import { firebaseAuth, firestoreDb, isFirebaseConfigured } from "@/services/firebase/config";
+import { watchHistoryService } from "@/services/firebase/watchHistory";
 import { extractYouTubeVideoId } from "@/services/utils/formatting";
 import type { HomepageRow, MediaItem, SearchFilters } from "@/types/domain";
 
@@ -49,6 +50,37 @@ function toMediaItem(docId: string, data: Record<string, unknown>): MediaItem {
     location: data.location ? String(data.location) : undefined,
     youtubeVideoId: data.youtubeVideoId ? String(data.youtubeVideoId) : undefined,
   };
+}
+
+function scoreRelatedMedia(candidate: MediaItem, sources: MediaItem[], favoriteIds: Set<string>) {
+  let score = 0;
+
+  for (const source of sources) {
+    if (candidate.collectionId && candidate.collectionId === source.collectionId) {
+      score += 5;
+    }
+    if (candidate.categoryId && candidate.categoryId === source.categoryId) {
+      score += 3;
+    }
+    if (candidate.customSeasonId && candidate.customSeasonId === source.customSeasonId) {
+      score += 2;
+    }
+    if (candidate.autoYearSeason && candidate.autoYearSeason === source.autoYearSeason) {
+      score += 1;
+    }
+    const sharedTags = candidate.tags.filter((tag) => source.tags.includes(tag)).length;
+    score += sharedTags * 2;
+  }
+
+  if (favoriteIds.has(candidate.id)) {
+    score += 4;
+  }
+
+  if (candidate.featured) {
+    score += 1;
+  }
+
+  return score;
 }
 
 export const mediaService = {
@@ -290,6 +322,67 @@ export const mediaService = {
         media: demoMediaItems.find((item) => item.id === record.mediaItemId)!,
       }))
       .filter((item) => Boolean(item.media));
+  },
+  async listTopPicks(profileId: string, spaceId: string) {
+    const [allMedia, favorites, continueWatching, watchHistory] = await Promise.all([
+      this.listRecentlyAdded(spaceId),
+      this.listFavorites(profileId, spaceId),
+      this.listContinueWatching(profileId, spaceId),
+      watchHistoryService.listHistory(spaceId, profileId),
+    ]);
+
+    const favoriteIds = new Set(favorites.map((item) => item.id));
+    const currentIds = new Set(continueWatching.map((item) => item.media.id));
+    const historyIds = new Set(watchHistory.map((item) => item.mediaItemId));
+    const sourceIds = new Set([...favoriteIds, ...currentIds, ...historyIds]);
+
+    const sourceMedia = allMedia.filter((item) => sourceIds.has(item.id));
+    if (!sourceMedia.length) {
+      return allMedia.slice(0, 10);
+    }
+
+    return allMedia
+      .filter((candidate) => !currentIds.has(candidate.id))
+      .map((candidate) => ({
+        media: candidate,
+        score: scoreRelatedMedia(candidate, sourceMedia, favoriteIds),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score || b.media.dateOfMemory.localeCompare(a.media.dateOfMemory))
+      .slice(0, 10)
+      .map((item) => item.media);
+  },
+  async getBecauseYouWatched(profileId: string, spaceId: string) {
+    const [allMedia, watchHistory] = await Promise.all([
+      this.listRecentlyAdded(spaceId),
+      watchHistoryService.listHistory(spaceId, profileId),
+    ]);
+
+    const anchorHistory = watchHistory[0];
+    if (!anchorHistory) {
+      return { title: "Because You Watched", items: [] as MediaItem[] };
+    }
+
+    const anchorMedia = allMedia.find((item) => item.id === anchorHistory.mediaItemId);
+    if (!anchorMedia) {
+      return { title: "Because You Watched", items: [] as MediaItem[] };
+    }
+
+    const items = allMedia
+      .filter((candidate) => candidate.id !== anchorMedia.id)
+      .map((candidate) => ({
+        media: candidate,
+        score: scoreRelatedMedia(candidate, [anchorMedia], new Set<string>()),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score || b.media.dateOfMemory.localeCompare(a.media.dateOfMemory))
+      .slice(0, 10)
+      .map((item) => item.media);
+
+    return {
+      title: `Because You Watched ${anchorMedia.title}`,
+      items,
+    };
   },
   async search(spaceId: string, filters: SearchFilters) {
     if (isFirebaseConfigured && firestoreDb) {

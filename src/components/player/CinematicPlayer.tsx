@@ -7,7 +7,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { getAutoplayCountdownSeconds } from "@/services/player/autoplay";
 import type { MediaItem } from "@/types/domain";
-import { YouTubePlayerSurface } from "@/components/player/YouTubePlayerSurface";
+import { YouTubePlayerSurface, type YouTubePlayerSurfaceHandle } from "@/components/player/YouTubePlayerSurface";
 
 function PhotoCollectionPlayback({
   media,
@@ -65,6 +65,7 @@ export function CinematicPlayer({
   onProgressPersist?: (seconds: number, duration: number) => void;
 }) {
   const { spaceSlug = "luna-house" } = useParams();
+  const videoSurfaceRef = useRef<YouTubePlayerSurfaceHandle | null>(null);
   const [playing, setPlaying] = useState(true);
   const [progress, setProgress] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -133,9 +134,33 @@ export function CinematicPlayer({
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA"].includes(target.tagName)) {
+        return;
+      }
       if (event.key === " ") {
         event.preventDefault();
-        setPlaying((value) => !value);
+        if (media.type === "video") {
+          videoSurfaceRef.current?.togglePlayback();
+        } else {
+          setPlaying((value) => !value);
+        }
+      }
+      if (event.key === "ArrowRight" && media.type === "video") {
+        event.preventDefault();
+        videoSurfaceRef.current?.seekBy(20);
+      }
+      if (event.key === "ArrowLeft" && media.type === "video") {
+        event.preventDefault();
+        videoSurfaceRef.current?.seekBy(-20);
+      }
+      if (event.key === "ArrowUp" && media.type === "video") {
+        event.preventDefault();
+        videoSurfaceRef.current?.adjustVolume(10);
+      }
+      if (event.key === "ArrowDown" && media.type === "video") {
+        event.preventDefault();
+        videoSurfaceRef.current?.adjustVolume(-10);
       }
       if (event.key.toLowerCase() === "f") {
         document.documentElement.requestFullscreen?.().catch(() => undefined);
@@ -146,7 +171,7 @@ export function CinematicPlayer({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [media.type]);
 
   return (
     <div
@@ -171,6 +196,7 @@ export function CinematicPlayer({
           showDetails={showDetails}
           title={media.title}
           videoId={media.youtubeVideoId}
+          ref={videoSurfaceRef}
         />
       ) : (
         <PhotoCollectionPlayback media={media} playing={playing} />

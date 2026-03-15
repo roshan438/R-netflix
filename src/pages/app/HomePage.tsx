@@ -7,6 +7,7 @@ import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { useAuth } from "@/context/AuthContext";
 import { useProfile } from "@/context/ProfileContext";
 import { mediaService } from "@/services/firebase/media";
+import { watchHistoryService } from "@/services/firebase/watchHistory";
 import type { Collection, MediaItem, Season, Category } from "@/types/domain";
 
 export function HomePage() {
@@ -16,31 +17,94 @@ export function HomePage() {
   const [recent, setRecent] = useState<MediaItem[]>([]);
   const [continueWatching, setContinueWatching] = useState<MediaItem[]>([]);
   const [favorites, setFavorites] = useState<MediaItem[]>([]);
+  const [topPicks, setTopPicks] = useState<MediaItem[]>([]);
+  const [becauseYouWatched, setBecauseYouWatched] = useState<{
+    title: string;
+    items: MediaItem[];
+  }>({
+    title: "Because You Watched",
+    items: [],
+  });
+  const [progressByMediaId, setProgressByMediaId] = useState<Record<string, number>>({});
   const [collections, setCollections] = useState<Collection[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
 
   useEffect(() => {
     if (!currentSpace || !activeProfile) return;
-    mediaService.listRecentlyAdded(currentSpace.id).then((items) => {
-      setRecent(items);
-      setFeatured((current) => current ?? items[0] ?? null);
+    Promise.all([
+      mediaService.listRecentlyAdded(currentSpace.id),
+      mediaService.getFeaturedMedia(currentSpace.id),
+      mediaService.listContinueWatching(activeProfile.id, currentSpace.id),
+      mediaService.listFavorites(activeProfile.id, currentSpace.id),
+      mediaService.listTopPicks(activeProfile.id, currentSpace.id),
+      mediaService.getBecauseYouWatched(activeProfile.id, currentSpace.id),
+      mediaService.listCollections(currentSpace.id),
+      mediaService.listCategories(currentSpace.id),
+      mediaService.listSeasons(currentSpace.id),
+      watchHistoryService.listHistory(currentSpace.id, activeProfile.id),
+    ]).then(([
+      recentItems,
+      featuredItem,
+      continueRows,
+      favoriteItems,
+      topPickItems,
+      becauseYouWatchedRow,
+      collectionItems,
+      categoryItems,
+      seasonItems,
+      historyRows,
+    ]) => {
+      setRecent(recentItems);
+      setFeatured(featuredItem ?? recentItems[0] ?? null);
+      setContinueWatching(continueRows.map((item) => item.media));
+      setFavorites(favoriteItems);
+      setTopPicks(topPickItems);
+      setBecauseYouWatched(becauseYouWatchedRow);
+      setCollections(collectionItems);
+      setCategories(categoryItems);
+      setSeasons(seasonItems);
+      setProgressByMediaId(
+        Object.fromEntries(
+          historyRows
+            .filter((row) => row.percentComplete > 0 && row.percentComplete < 100)
+            .map((row) => [row.mediaItemId, row.percentComplete]),
+        ),
+      );
     });
-    mediaService.getFeaturedMedia(currentSpace.id).then((item) => setFeatured(item ?? null));
-    mediaService
-      .listContinueWatching(activeProfile.id, currentSpace.id)
-      .then((items) => setContinueWatching(items.map((item) => item.media)));
-    mediaService.listFavorites(activeProfile.id, currentSpace.id).then(setFavorites);
-    mediaService.listCollections(currentSpace.id).then(setCollections);
-    mediaService.listCategories(currentSpace.id).then(setCategories);
-    mediaService.listSeasons(currentSpace.id).then(setSeasons);
   }, [activeProfile, currentSpace]);
 
   return (
     <DashboardLayout>
       {featured ? <HeroBanner media={featured} /> : null}
-      <MediaRail eyebrow="Priority Row" items={recent} title="Recently Added" />
-      <MediaRail eyebrow="Resume" items={continueWatching} title="Continue Watching" />
+      <MediaRail
+        eyebrow="Priority Row"
+        items={recent}
+        progressByMediaId={progressByMediaId}
+        title="Recently Added"
+      />
+      <MediaRail
+        eyebrow="Resume"
+        items={continueWatching}
+        progressByMediaId={progressByMediaId}
+        title="Continue Watching"
+      />
+      {topPicks.length ? (
+        <MediaRail
+          eyebrow="Top Picks"
+          items={topPicks}
+          progressByMediaId={progressByMediaId}
+          title="Picked For This Profile"
+        />
+      ) : null}
+      {becauseYouWatched.items.length ? (
+        <MediaRail
+          eyebrow="Because You Watched"
+          items={becauseYouWatched.items}
+          progressByMediaId={progressByMediaId}
+          title={becauseYouWatched.title}
+        />
+      ) : null}
       <TaxonomyGrid
         basePath="seasons"
         items={seasons.map((season) => ({
@@ -60,7 +124,12 @@ export function HomePage() {
         }))}
         title="Categories"
       />
-      <MediaRail eyebrow="Personal" items={favorites} title="My List" />
+      <MediaRail
+        eyebrow="Personal"
+        items={favorites}
+        progressByMediaId={progressByMediaId}
+        title="My List"
+      />
     </DashboardLayout>
   );
 }

@@ -30,12 +30,18 @@ export function HeroBanner({ media }: { media: MediaItem }) {
     <section className="relative overflow-hidden rounded-[2.25rem] border border-white/10">
       <img
         alt={media.title}
-        className="cinematic-mask h-[65vh] min-h-[520px] w-full object-cover"
+        className="cinematic-mask h-[68vh] min-h-[540px] w-full object-cover scale-[1.02]"
         src={media.backdropUrl}
       />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#04070dcc] via-[#04070d99] to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#02040acc] via-[#02040aad] to-[#02040a33]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(214,177,108,0.22),transparent_32%),radial-gradient(circle_at_80%_10%,rgba(255,132,92,0.15),transparent_28%)]" />
       <div className="absolute inset-x-0 bottom-0 p-8 sm:p-10 lg:max-w-3xl lg:p-14">
-        <Badge className="mb-4">Featured Memory</Badge>
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <Badge className="shadow-halo">Featured Memory</Badge>
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] uppercase tracking-[0.32em] text-white/60">
+            Streaming now
+          </span>
+        </div>
         <h1 className="font-display text-5xl leading-none text-white sm:text-6xl lg:text-7xl">
           {media.title}
         </h1>
