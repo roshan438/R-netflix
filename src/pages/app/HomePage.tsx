@@ -17,12 +17,21 @@ export function HomePage() {
   const [recent, setRecent] = useState<MediaItem[]>([]);
   const [continueWatching, setContinueWatching] = useState<MediaItem[]>([]);
   const [favorites, setFavorites] = useState<MediaItem[]>([]);
+  const [recentlyWatched, setRecentlyWatched] = useState<MediaItem[]>([]);
   const [topPicks, setTopPicks] = useState<MediaItem[]>([]);
   const [becauseYouWatched, setBecauseYouWatched] = useState<{
     title: string;
     items: MediaItem[];
   }>({
     title: "Because You Watched",
+    items: [],
+  });
+  const [moreLikeThis, setMoreLikeThis] = useState<MediaItem[]>([]);
+  const [fromFavoriteCollection, setFromFavoriteCollection] = useState<{
+    title: string;
+    items: MediaItem[];
+  }>({
+    title: "From Your Favorite Collection",
     items: [],
   });
   const [progressByMediaId, setProgressByMediaId] = useState<Record<string, number>>({});
@@ -37,8 +46,11 @@ export function HomePage() {
       mediaService.getFeaturedMedia(currentSpace.id),
       mediaService.listContinueWatching(activeProfile.id, currentSpace.id),
       mediaService.listFavorites(activeProfile.id, currentSpace.id),
+      mediaService.listRecentlyWatched(activeProfile.id, currentSpace.id),
       mediaService.listTopPicks(activeProfile.id, currentSpace.id),
       mediaService.getBecauseYouWatched(activeProfile.id, currentSpace.id),
+      mediaService.getMoreLikeThis(activeProfile.id, currentSpace.id),
+      mediaService.getFromFavoriteCollection(activeProfile.id, currentSpace.id),
       mediaService.listCollections(currentSpace.id),
       mediaService.listCategories(currentSpace.id),
       mediaService.listSeasons(currentSpace.id),
@@ -48,8 +60,11 @@ export function HomePage() {
       featuredItem,
       continueRows,
       favoriteItems,
+      recentlyWatchedItems,
       topPickItems,
       becauseYouWatchedRow,
+      moreLikeThisItems,
+      fromFavoriteCollectionRow,
       collectionItems,
       categoryItems,
       seasonItems,
@@ -59,8 +74,11 @@ export function HomePage() {
       setFeatured(featuredItem ?? recentItems[0] ?? null);
       setContinueWatching(continueRows.map((item) => item.media));
       setFavorites(favoriteItems);
+      setRecentlyWatched(recentlyWatchedItems);
       setTopPicks(topPickItems);
       setBecauseYouWatched(becauseYouWatchedRow);
+      setMoreLikeThis(moreLikeThisItems);
+      setFromFavoriteCollection(fromFavoriteCollectionRow);
       setCollections(collectionItems);
       setCategories(categoryItems);
       setSeasons(seasonItems);
@@ -97,12 +115,36 @@ export function HomePage() {
           title="Picked For This Profile"
         />
       ) : null}
+      {recentlyWatched.length ? (
+        <MediaRail
+          eyebrow="Recent History"
+          items={recentlyWatched}
+          progressByMediaId={progressByMediaId}
+          title="Recently Watched"
+        />
+      ) : null}
       {becauseYouWatched.items.length ? (
         <MediaRail
           eyebrow="Because You Watched"
           items={becauseYouWatched.items}
           progressByMediaId={progressByMediaId}
           title={becauseYouWatched.title}
+        />
+      ) : null}
+      {moreLikeThis.length ? (
+        <MediaRail
+          eyebrow="Discover"
+          items={moreLikeThis}
+          progressByMediaId={progressByMediaId}
+          title="More Like This"
+        />
+      ) : null}
+      {fromFavoriteCollection.items.length ? (
+        <MediaRail
+          eyebrow="Favorites"
+          items={fromFavoriteCollection.items}
+          progressByMediaId={progressByMediaId}
+          title={fromFavoriteCollection.title}
         />
       ) : null}
       <TaxonomyGrid

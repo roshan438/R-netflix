@@ -83,6 +83,15 @@ function scoreRelatedMedia(candidate: MediaItem, sources: MediaItem[], favoriteI
   return score;
 }
 
+function dedupeMedia(items: MediaItem[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
 export const mediaService = {
   async getFeaturedMedia(spaceId: string) {
     if (isFirebaseConfigured && firestoreDb) {
@@ -352,6 +361,18 @@ export const mediaService = {
       .slice(0, 10)
       .map((item) => item.media);
   },
+  async listRecentlyWatched(profileId: string, spaceId: string) {
+    const [watchHistory, allMedia] = await Promise.all([
+      watchHistoryService.listHistory(spaceId, profileId),
+      this.listRecentlyAdded(spaceId),
+    ]);
+
+    return dedupeMedia(
+      watchHistory
+        .map((row) => allMedia.find((item) => item.id === row.mediaItemId))
+        .filter((item): item is MediaItem => Boolean(item)),
+    ).slice(0, 10);
+  },
   async getBecauseYouWatched(profileId: string, spaceId: string) {
     const [allMedia, watchHistory] = await Promise.all([
       this.listRecentlyAdded(spaceId),
@@ -381,6 +402,67 @@ export const mediaService = {
 
     return {
       title: `Because You Watched ${anchorMedia.title}`,
+      items,
+    };
+  },
+  async getMoreLikeThis(profileId: string, spaceId: string) {
+    const [allMedia, favorites, watchHistory] = await Promise.all([
+      this.listRecentlyAdded(spaceId),
+      this.listFavorites(profileId, spaceId),
+      watchHistoryService.listHistory(spaceId, profileId),
+    ]);
+
+    const recentHistorySources = watchHistory
+      .slice(0, 3)
+      .map((row) => allMedia.find((item) => item.id === row.mediaItemId))
+      .filter((item): item is MediaItem => Boolean(item));
+    const sourceMedia = dedupeMedia([...favorites.slice(0, 3), ...recentHistorySources]);
+    const sourceIds = new Set(sourceMedia.map((item) => item.id));
+    const favoriteIds = new Set(favorites.map((item) => item.id));
+
+    if (!sourceMedia.length) {
+      return [] as MediaItem[];
+    }
+
+    return allMedia
+      .filter((candidate) => !sourceIds.has(candidate.id))
+      .map((candidate) => ({
+        media: candidate,
+        score: scoreRelatedMedia(candidate, sourceMedia, favoriteIds),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score || b.media.dateOfMemory.localeCompare(a.media.dateOfMemory))
+      .slice(0, 10)
+      .map((item) => item.media);
+  },
+  async getFromFavoriteCollection(profileId: string, spaceId: string) {
+    const [allMedia, favorites] = await Promise.all([
+      this.listRecentlyAdded(spaceId),
+      this.listFavorites(profileId, spaceId),
+    ]);
+
+    if (!favorites.length) {
+      return {
+        title: "From Your Favorite Collection",
+        items: [] as MediaItem[],
+      };
+    }
+
+    const collectionCounts = new Map<string, number>();
+    favorites.forEach((item) => {
+      collectionCounts.set(item.collectionId, (collectionCounts.get(item.collectionId) ?? 0) + 1);
+    });
+
+    const favoriteCollectionId =
+      [...collectionCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? favorites[0].collectionId;
+    const anchor = favorites.find((item) => item.collectionId === favoriteCollectionId) ?? favorites[0];
+    const items = allMedia
+      .filter((item) => item.collectionId === favoriteCollectionId && !favorites.some((fav) => fav.id === item.id))
+      .sort((a, b) => a.playbackOrder - b.playbackOrder)
+      .slice(0, 10);
+
+    return {
+      title: `From ${anchor.title.split(":")[0] || "Your Favorite Collection"}`,
       items,
     };
   },

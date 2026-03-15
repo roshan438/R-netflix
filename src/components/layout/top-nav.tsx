@@ -1,11 +1,14 @@
 import { Bell, Clapperboard, LogOut, Mail, Menu, Search, Settings, Shield, UploadCloud, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, useParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useProfile } from "@/context/ProfileContext";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/common/logo-mark";
+import { inviteService } from "@/services/firebase/invites";
+import { mediaService } from "@/services/firebase/media";
 import { canManageSpace } from "@/services/utils/permissions";
+import { spaceService } from "@/services/firebase/spaces";
 
 const links = [
   { label: "Home", to: "" },
@@ -29,11 +32,51 @@ export function TopNav() {
   const membership = user?.memberships.find((item) => item.spaceId === currentSpace?.id);
   const canManageCurrentSpace = membership ? canManageSpace(membership.role) : false;
   const isSuperAdmin = user?.platformRole === "super_admin";
+  const [notificationCount, setNotificationCount] = useState(0);
   const notificationTarget = isSuperAdmin
     ? "/platform/spaces"
     : canManageCurrentSpace
       ? `/${spaceSlug}/admin/invites`
       : `/${spaceSlug}/continue-watching`;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadNotificationCount() {
+      if (!currentSpace || !user) {
+        if (!cancelled) setNotificationCount(0);
+        return;
+      }
+
+      if (isSuperAdmin) {
+        const pendingRequests = await spaceService.listPendingRequests().catch(() => []);
+        if (!cancelled) setNotificationCount(pendingRequests.length);
+        return;
+      }
+
+      if (canManageCurrentSpace) {
+        const count = await inviteService.countPendingInvites(currentSpace.id).catch(() => 0);
+        if (!cancelled) setNotificationCount(count);
+        return;
+      }
+
+      const activeProfileId = activeProfile?.id ?? window.localStorage.getItem("reverie.activeProfileId");
+      if (!activeProfileId) {
+        if (!cancelled) setNotificationCount(0);
+        return;
+      }
+      const continueWatchingItems = await mediaService
+        .listContinueWatching(activeProfileId, currentSpace.id)
+        .catch(() => []);
+      if (!cancelled) setNotificationCount(continueWatchingItems.length);
+    }
+
+    void loadNotificationCount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProfile?.id, canManageCurrentSpace, currentSpace, isSuperAdmin, user]);
 
   return (
     <header className="sticky top-0 z-40 mb-6 border border-white/10 bg-slate-950/78 px-3 py-2.5 backdrop-blur-xl sm:mb-8 xl:rounded-[2rem] xl:px-5 xl:py-4">
@@ -123,14 +166,21 @@ export function TopNav() {
             </Button>
           </Link>
           <Link to={notificationTarget}>
-            <Button
-              className="hidden h-11 w-11 xl:inline-flex"
-              size="icon"
-              variant="ghost"
-              aria-label={isSuperAdmin ? "Pending approvals" : canManageCurrentSpace ? "Invites" : "Continue watching"}
-            >
-              <Bell className="h-[18px] w-[18px]" />
-            </Button>
+            <div className="relative hidden xl:block">
+              <Button
+                className="h-11 w-11 xl:inline-flex"
+                size="icon"
+                variant="ghost"
+                aria-label={isSuperAdmin ? "Pending approvals" : canManageCurrentSpace ? "Invites" : "Continue watching"}
+              >
+                <Bell className="h-[18px] w-[18px]" />
+              </Button>
+              {notificationCount > 0 ? (
+                <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-[0_8px_22px_rgba(244,63,94,0.45)]">
+                  {notificationCount > 9 ? "9+" : notificationCount}
+                </span>
+              ) : null}
+            </div>
           </Link>
           {canManageCurrentSpace ? (
             <>
@@ -263,6 +313,11 @@ export function TopNav() {
               <Button className="h-10 px-4" variant="ghost">
                 <Bell className="h-4 w-4" />
                 {isSuperAdmin ? "Approvals" : canManageCurrentSpace ? "Invites" : "Continue Watching"}
+                {notificationCount > 0 ? (
+                  <span className="ml-1 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                    {notificationCount > 9 ? "9+" : notificationCount}
+                  </span>
+                ) : null}
               </Button>
             </Link>
             {canManageCurrentSpace ? (

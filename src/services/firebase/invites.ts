@@ -16,6 +16,20 @@ import { callFunction } from "@/services/firebase/callables";
 import { firebaseAuth, firestoreDb, isFirebaseConfigured } from "@/services/firebase/config";
 
 export const inviteService = {
+  async countPendingInvites(spaceId: string) {
+    if (!isFirebaseConfigured || !firestoreDb) {
+      return 0;
+    }
+
+    const snapshot = await getDocs(
+      query(
+        collection(firestoreDb, `spaces/${spaceId}/invites`),
+        where("status", "==", "pending"),
+      ),
+    ).catch(() => null);
+
+    return snapshot?.size ?? 0;
+  },
   async createInvite(input: {
     email: string;
     role: "member" | "space_admin";
