@@ -76,10 +76,14 @@ export const YouTubePlayerSurface = forwardRef<YouTubePlayerSurfaceHandle, {
   onEnded,
   onProgress,
 }, ref) => {
+  const isTouchDevice =
+    typeof window !== "undefined" &&
+    (window.matchMedia?.("(pointer: coarse)").matches || "ontouchstart" in window);
   const playerRef = useRef<YouTubePlayerInstance | null>(null);
   const onEndedRef = useRef(onEnded);
   const onProgressRef = useRef(onProgress);
   const isSeekingRef = useRef(false);
+  const autoplayGuardRef = useRef<number | null>(null);
   const containerId = useMemo(() => `youtube-player-${videoId}`, [videoId]);
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(false);
@@ -87,6 +91,7 @@ export const YouTubePlayerSurface = forwardRef<YouTubePlayerSurfaceHandle, {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [interactionPulse, setInteractionPulse] = useState<"play" | "pause" | null>(null);
+  const [requiresTapToStart, setRequiresTapToStart] = useState(false);
   const pulseTimerRef = useRef<number | null>(null);
 
   const showPulse = (state: "play" | "pause") => {
@@ -109,6 +114,17 @@ export const YouTubePlayerSurface = forwardRef<YouTubePlayerSurfaceHandle, {
       setPlaying(true);
       showPulse("play");
     }
+  };
+
+  const beginPlaybackFromUserGesture = () => {
+    if (muted) {
+      playerRef.current?.unMute();
+      setMuted(false);
+    }
+    playerRef.current?.playVideo();
+    setPlaying(true);
+    setRequiresTapToStart(false);
+    showPulse("play");
   };
 
   const seekBy = (seconds: number) => {
@@ -169,13 +185,30 @@ export const YouTubePlayerSurface = forwardRef<YouTubePlayerSurfaceHandle, {
               playerRef.current?.seekTo(resumeSeconds, true);
               setProgress(resumeSeconds);
             }
+            if (isTouchDevice) {
+              playerRef.current?.mute();
+              setMuted(true);
+            }
             setVolume(playerRef.current?.getVolume() ?? 100);
             playerRef.current?.playVideo();
+            autoplayGuardRef.current = window.setTimeout(() => {
+              if (!playerRef.current) return;
+              const current = playerRef.current.getCurrentTime() ?? 0;
+              if (current < 0.5) {
+                setPlaying(false);
+                setRequiresTapToStart(true);
+              }
+            }, 1200);
           },
           onStateChange: (event: { data: number }) => {
             const states = window.YT?.PlayerState;
             if (event.data === states?.PLAYING) {
+              if (autoplayGuardRef.current) {
+                window.clearTimeout(autoplayGuardRef.current);
+                autoplayGuardRef.current = null;
+              }
               setPlaying(true);
+              setRequiresTapToStart(false);
               if (intervalId) window.clearInterval(intervalId);
               intervalId = window.setInterval(() => {
                 const current = playerRef.current?.getCurrentTime() ?? 0;
@@ -205,22 +238,38 @@ export const YouTubePlayerSurface = forwardRef<YouTubePlayerSurfaceHandle, {
     return () => {
       if (intervalId) window.clearInterval(intervalId);
       if (pulseTimerRef.current) window.clearTimeout(pulseTimerRef.current);
+      if (autoplayGuardRef.current) window.clearTimeout(autoplayGuardRef.current);
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [containerId, resumeSeconds, videoId]);
+  }, [containerId, isTouchDevice, resumeSeconds, videoId]);
 
   return (
     <>
       <div className="absolute inset-0">
         <div className="h-full w-full" id={containerId} />
       </div>
-      <button
-        aria-label={playing ? "Pause video" : "Play video"}
-        className="absolute inset-0 z-10 cursor-default"
-        onClick={togglePlayback}
-        type="button"
-      />
+      {!isTouchDevice ? (
+        <button
+          aria-label={playing ? "Pause video" : "Play video"}
+          className="absolute inset-0 z-10 cursor-default"
+          onClick={togglePlayback}
+          type="button"
+        />
+      ) : null}
+      {isTouchDevice && requiresTapToStart ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/35 backdrop-blur-[2px]">
+          <Button
+            className="h-14 px-6 text-base shadow-[0_18px_55px_rgba(0,0,0,0.45)]"
+            onClick={beginPlaybackFromUserGesture}
+            size="lg"
+            type="button"
+          >
+            <Play className="h-5 w-5 fill-current" />
+            Tap to Start
+          </Button>
+        </div>
+      ) : null}
       <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
         <div
           className={`flex h-20 w-20 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/95 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md transition-all duration-300 sm:h-24 sm:w-24 ${
