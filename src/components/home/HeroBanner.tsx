@@ -41,7 +41,7 @@ export function HeroBanner({ media }: { media: MediaItem }) {
         </h1>
         <p
           className={`mt-5 max-w-2xl text-base leading-7 text-white/75 sm:text-lg ${
-            descriptionExpanded ? "" : "line-clamp-4 sm:line-clamp-5"
+            descriptionExpanded ? "" : "line-clamp-2 sm:line-clamp-3"
           }`}
         >
           {media.description}
