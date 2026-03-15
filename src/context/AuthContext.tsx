@@ -128,15 +128,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         spaceSlug: string;
       }) {
         setLoading(true);
-        const { account, space } = await authService.signInWithSpace(
-          email,
-          password,
-          spaceSlug,
-        );
-        setUser(account);
-        setCurrentSpace(space);
-        setLoading(false);
-        return { account, space };
+        try {
+          const { account, space } = await authService.signInWithSpace(
+            email,
+            password,
+            spaceSlug,
+          );
+          setUser(account);
+          setCurrentSpace(space);
+          return { account, space };
+        } finally {
+          setLoading(false);
+        }
       },
       async signUp({
         email,
@@ -148,23 +151,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         spaceSlug: string;
       }) {
         setLoading(true);
-        const { account, space } = await authService.signUpWithSpace(
-          email,
-          password,
-          spaceSlug,
-        );
-        setUser(account);
-        setCurrentSpace(space);
-        setLoading(false);
-        return { account, space };
+        try {
+          const { account, space } = await authService.signUpWithSpace(
+            email,
+            password,
+            spaceSlug,
+          );
+          setUser(account);
+          setCurrentSpace(space);
+          return { account, space };
+        } finally {
+          setLoading(false);
+        }
       },
       async signInWithGoogle(spaceSlug: string) {
         setLoading(true);
-        const { account, space } = await authService.signInWithGoogle(spaceSlug);
-        setUser(account);
-        setCurrentSpace(space);
-        setLoading(false);
-        return { account, space };
+        try {
+          const { account, space } = await authService.signInWithGoogle(spaceSlug);
+          setUser(account);
+          setCurrentSpace(space);
+          return { account, space };
+        } finally {
+          setLoading(false);
+        }
       },
       async signOut() {
         await authService.signOut();
