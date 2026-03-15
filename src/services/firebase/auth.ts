@@ -337,23 +337,23 @@ async function resolveAccountForSpace(
     throw new Error("This private space is not assigned to your account. Wait for approval or ask your admin to invite this email.");
   }
 
-  if (membership.ref.id !== firebaseUser.uid) {
-    await updateDoc(membership.ref, {
-      userId: firebaseUser.uid,
-      status: "active",
-      updatedAt: serverTimestamp(),
-    });
-  }
+  await updateDoc(membership.ref, {
+    userId: firebaseUser.uid,
+    status: "active",
+    inviteStatus: "accepted",
+    updatedAt: serverTimestamp(),
+  });
 
   const userSnapshot = await getDoc(doc(firestoreDb, "users", firebaseUser.uid));
   const userData = userSnapshot.data();
 
-  if (!userData?.defaultSpaceId) {
-    await updateDoc(doc(firestoreDb, "users", firebaseUser.uid), {
-      defaultSpaceId: space.id,
-      updatedAt: serverTimestamp(),
-    });
-  }
+  await updateDoc(doc(firestoreDb, "users", firebaseUser.uid), {
+    defaultSpaceId: space.id,
+    requestStatus: null,
+    pendingRequestId: null,
+    assignedSpaceId: space.id,
+    updatedAt: serverTimestamp(),
+  });
 
   await ensureProfileForMember(space.id, firebaseUser, membership.role);
 
