@@ -44,7 +44,7 @@ export function MediaCard({
   return (
     <>
       <Link
-        className="group block min-w-[250px] max-w-[250px] transition focus:outline-none focus:ring-2 focus:ring-gold md:min-w-[280px] md:max-w-[280px]"
+        className="group block min-w-[280px] max-w-[280px] transition focus:outline-none focus:ring-2 focus:ring-gold md:min-w-[320px] md:max-w-[320px] 2xl:min-w-[340px] 2xl:max-w-[340px]"
         to={`/${spaceSlug}/player/${media.id}`}
       >
         <div
@@ -78,22 +78,22 @@ export function MediaCard({
             )}
             {media.type === "video" ? "Film" : "Photo Story"}
           </div>
-          <div className="absolute inset-x-0 top-14 z-20 hidden px-4 opacity-0 transition duration-300 group-hover:top-16 group-hover:opacity-100 lg:block">
-            <div className="flex items-center gap-2">
+          <div className="absolute inset-x-0 top-16 z-20 hidden px-5 opacity-0 transition duration-300 group-hover:top-[4.5rem] group-hover:opacity-100 lg:block">
+            <div className="flex flex-wrap items-center gap-2.5">
               <Button
-                className="h-10 w-10"
+                className="h-11 px-4 shadow-[0_12px_32px_rgba(0,0,0,0.35)]"
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
                   navigate(`/${spaceSlug}/player/${media.id}`);
                 }}
-                size="icon"
                 type="button"
               >
                 <Play className="h-4 w-4 fill-current" />
+                Play
               </Button>
               <Button
-                className="h-10 w-10"
+                className="h-11 px-4"
                 onClick={async (event) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -101,33 +101,29 @@ export function MediaCard({
                   const result = await favoritesService.toggleFavorite(currentSpace.id, activeProfile.id, media.id);
                   setFavorite(result.favorite);
                 }}
-                size="icon"
                 type="button"
                 variant="secondary"
               >
                 {favorite ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {favorite ? "Saved" : "My List"}
               </Button>
               <Button
-                className="h-10 w-10"
+                className="h-11 px-4"
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
                   setShowMoreInfo(true);
                 }}
-                size="icon"
                 type="button"
                 variant="ghost"
               >
                 <Info className="h-4 w-4" />
+                More Info
               </Button>
             </div>
-            <p className="mt-4 line-clamp-3 max-w-[88%] text-sm leading-6 text-white/72">
-              {media.description}
-            </p>
           </div>
-          <div className="absolute inset-x-0 bottom-0 p-4">
-            <h3 className="font-display text-2xl text-white">{media.title}</h3>
-            <p className="mt-1 line-clamp-2 text-sm text-white/65">{media.description}</p>
+          <div className="absolute inset-x-0 bottom-0 p-5">
+            <h3 className="font-display text-[1.7rem] leading-tight text-white">{media.title}</h3>
             {typeof progressPercent === "number" && progressPercent > 0 ? (
               <p className="mt-2 text-[11px] uppercase tracking-[0.28em] text-white/55">
                 Resume from {Math.min(progressPercent, 100)}%
